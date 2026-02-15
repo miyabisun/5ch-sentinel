@@ -7,6 +7,9 @@
 | ランタイム | Node.js (ESM) | アプリケーション実行 |
 | データベース | SQLite ([better-sqlite3](https://github.com/WiseLibs/better-sqlite3)) | 監視対象スレッドの永続化 |
 | 文字コード変換 | [iconv-lite](https://github.com/ashtuchkin/iconv-lite) | 5ch の Shift_JIS レスポンスを UTF-8 にデコード |
+| Discord 通知 | [discord.js](https://discord.js.org/) | Discord チャンネルへのメッセージ送信 |
+| 環境変数 | [dotenv](https://github.com/motdotla/dotenv) | `.env` ファイルから設定を読み込み |
+| 対話型 CLI | [@inquirer/select](https://github.com/SBoudrias/Inquirer.js), [@inquirer/input](https://github.com/SBoudrias/Inquirer.js) | セットアップ時のチャンネル選択・トークン入力 |
 | ターミナル UI | [single-line-log](https://github.com/mafintosh/single-line-log) | ステータスバーの描画 |
 | テスト | [vitest](https://vitest.dev/) | ユニットテスト |
 
@@ -16,6 +19,8 @@
 index.js                  エントリポイント (main 関数・設定値)
 add.js                    スレッド登録 CLI
 find_url.js               スレタイ検索 CLI (find.5ch.net)
+setup.js                  対話型セットアップ (トークン入力・チャンネル選択・.env 書き込み)
+.env.example              環境変数テンプレート
 src/
   functions/              純粋関数 (副作用なし・テスト対象)
     parse-thread-url.js     URL 解析

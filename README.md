@@ -5,13 +5,16 @@
 ## 必要環境
 
 - Node.js 18 以上
-- Discord 通知を受け取るための HTTP エンドポイント（デフォルト: `http://localhost:5000/discord/channels`）
+- Discord Bot トークン（[Discord Developer Portal](https://discord.com/developers/applications) で作成）
 
 ## セットアップ
 
 ```bash
 npm install
+npm run setup
 ```
+
+対話形式で Discord Bot トークンの入力と通知先チャンネルの選択を行い、`.env` に自動書き込みする。
 
 ## スレッド検索
 
@@ -51,12 +54,20 @@ npm start
 
 ## 設定値
 
+### 環境変数 (`.env`)
+
+| 変数 | 説明 |
+|---|---|
+| `DISCORD_TOKEN` | Discord Bot トークン |
+| `DISCORD_CHANNEL_ID` | 通知先チャンネル ID (`npm run setup` で確認) |
+
+### アプリケーション設定
+
 `index.js` 先頭の `config` オブジェクトで変更できる。
 
 | キー | デフォルト値 | 説明 |
 |---|---|---|
 | `userAgent` | `Monazilla/1.00 Mozilla/5.0 ...Chrome/133...` | 5ch へのリクエストに使う User-Agent |
-| `discordNotifyBase` | `http://localhost:5000/discord/channels` | Discord 通知先の Base URL |
 | `resThresholdForSizeCheck` | `900` | dat サイズチェックを開始するレス数 |
 | `resWarningThreshold` | `980` | レス数の警告閾値 |
 | `datSizeWarningKB` | `980` | dat サイズの警告閾値 (KB) |

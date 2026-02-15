@@ -7,11 +7,16 @@
   "scripts": {
     "start": "node index.js",
     "add": "node add.js",
+    "setup": "node setup.js",
     "find": "node find_url.js",
     "test": "vitest run"
   },
   "dependencies": {
+    "@inquirer/input": "^5.0.6",
+    "@inquirer/select": "^5.0.6",
     "better-sqlite3": "^11.8.1",
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.3.1",
     "iconv-lite": "^0.6.3",
     "single-line-log": "^1.1.2"
   },

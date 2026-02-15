@@ -1,5 +1,7 @@
+import "dotenv/config";
 import path from "path";
 import { fileURLToPath } from "url";
+import { Client, GatewayIntentBits } from "discord.js";
 
 import { initDatabase, getActiveThreads, getWarnedCount } from "./src/modules/database.js";
 import { log, clearStatusLine } from "./src/modules/logger.js";
@@ -16,13 +18,33 @@ const CHECK_INTERVAL_MS = 60 * 1000;
 
 const config = {
   userAgent: "Monazilla/1.00 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-  discordNotifyBase: "http://localhost:5000/api/discord/channels",
+  discordClient: null,
+  discordChannelId: process.env.DISCORD_CHANNEL_ID,
   resThresholdForSizeCheck: 900,
   resWarningThreshold: 980,
   datSizeWarningKB: 980,
 };
 
-function main() {
+async function main() {
+  if (!process.env.DISCORD_TOKEN || !process.env.DISCORD_CHANNEL_ID) {
+    console.error("エラー: .env に DISCORD_TOKEN と DISCORD_CHANNEL_ID を設定してください (npm run setup で確認できます)");
+    process.exit(1);
+  }
+
+  // Discord client setup
+  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+  await new Promise((resolve, reject) => {
+    client.once("ready", () => {
+      log(`Discord 接続完了 (${client.user.tag})`);
+      resolve();
+    });
+    client.once("error", reject);
+    client.login(process.env.DISCORD_TOKEN).catch(reject);
+  });
+
+  config.discordClient = client;
+
   const db = initDatabase(DB_PATH);
   let lastCheck = null;
 
@@ -58,9 +80,13 @@ function main() {
   process.on("SIGINT", () => {
     clearStatusLine();
     log("シャットダウン中...");
+    client.destroy();
     db.close();
     process.exit(0);
   });
 }
 
-main();
+main().catch((err) => {
+  console.error(`起動失敗: ${err.message}`);
+  process.exit(1);
+});

@@ -92,7 +92,7 @@ async function checkThread(db, thread, subjectEntries, config) {
     nextThread,
   });
 
-  await notifyDiscord(config.discordNotifyBase, "5ch-alert", content);
+  await notifyDiscord(config.discordClient, config.discordChannelId, content);
 
   // Mark as warned
   markWarned(db, thread.id);
