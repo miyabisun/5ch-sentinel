@@ -1,0 +1,21 @@
+{
+  "name": "5ch-sentinel",
+  "version": "1.0.0",
+  "description": "5ch thread monitor bot - detects thread endings and finds next threads",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "add": "node add.js",
+    "find": "node find_url.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "iconv-lite": "^0.6.3",
+    "single-line-log": "^1.1.2"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.5"
+  }
+}
