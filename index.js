@@ -16,7 +16,7 @@ const CHECK_INTERVAL_MS = 60 * 1000;
 
 const config = {
   userAgent: "Monazilla/1.00 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-  discordNotifyBase: "http://localhost:5000/discord/channels",
+  discordNotifyBase: "http://localhost:5000/api/discord/channels",
   resThresholdForSizeCheck: 900,
   resWarningThreshold: 980,
   datSizeWarningKB: 980,
