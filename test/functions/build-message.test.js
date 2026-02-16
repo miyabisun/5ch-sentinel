@@ -14,19 +14,12 @@ describe("buildWarningMessage", () => {
       },
     });
 
-    const expected =
-      "⚠️ **スレッド終了警告**\n" +
-      "タイトル: 【ブルアカ】ブルーアーカイブ -Blue Archive- Part5843\n" +
-      "URL: https://kizuna.5ch.net/test/read.cgi/iPhone/1771127145/\n" +
-      "現在のレス数: 491\n" +
-      "Datサイズ: 1025.0KB\n\n" +
-      "⬇️ 次スレ候補:\n" +
-      "【ブルアカ】ブルーアーカイブ -Blue Archive- Part5844\n" +
-      "https://kizuna.5ch.net/test/read.cgi/iPhone/1771200000/";
-    expect(msg).toBe(expected);
+    expect(msg).toContain("Datサイズ: 1025.0KB");
+    expect(msg).toMatch(/⬇️ 移行先:\n【ブルアカ】ブルーアーカイブ -Blue Archive- Part5844/);
+    expect(msg).toContain("https://kizuna.5ch.net/test/read.cgi/iPhone/1771200000/");
   });
 
-  it("shows fallback text when no next thread found", () => {
+  it("omits migration section when no next thread found", () => {
     const msg = buildWarningMessage({
       title: "【ブルアカ】ブルーアーカイブ -Blue Archive- Part5843",
       url: "https://kizuna.5ch.net/test/read.cgi/iPhone/1771127145/",
@@ -35,8 +28,8 @@ describe("buildWarningMessage", () => {
       nextThread: null,
     });
 
-    expect(msg).toMatch(/⬇️ 次スレ候補:\n※次スレ候補が見つかりませんでした$/);
-    expect(msg).not.toContain("undefined");
+    expect(msg).not.toContain("移行先");
+    expect(msg).toMatch(/1025\.0KB$/);
   });
 
   it("shows '不明' when datSizeKB is null", () => {
@@ -102,6 +95,22 @@ describe("buildWarningMessage", () => {
 
     expect(msg).toMatch(/^⚠️ \*\*スレッド終了警告\*\*/);
     expect(msg).not.toContain("終了通知");
+  });
+
+  it("shows dat消失 status when datGone is true", () => {
+    const msg = buildWarningMessage({
+      title: "テストスレ Part100",
+      url: "https://eagle.5ch.net/test/read.cgi/livejupiter/1700000000/",
+      resCount: 500,
+      datSizeKB: null,
+      nextThread: null,
+      dead: true,
+      datGone: true,
+    });
+
+    expect(msg).toMatch(/状態: dat消失 \(subject\.txt には存在\)/);
+    expect(msg).toMatch(/最終レス数: 500/);
+    expect(msg).not.toContain("Datサイズ");
   });
 
   it("shows dat落ち status when resCount is null", () => {

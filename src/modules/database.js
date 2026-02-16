@@ -54,6 +54,14 @@ export function getActiveThreads(db) {
     .all();
 }
 
+export function getActiveCount(db) {
+  return db
+    .prepare(
+      "SELECT COUNT(*) AS cnt FROM threads WHERE deleted_at IS NULL AND status = 'active'"
+    )
+    .get().cnt;
+}
+
 export function setStatus(db, id, status) {
   db.prepare("UPDATE threads SET status = ? WHERE id = ?").run(status, id);
 }
@@ -72,6 +80,21 @@ export function getDeadCount(db) {
       "SELECT COUNT(*) AS cnt FROM threads WHERE deleted_at IS NULL AND status = 'dead'"
     )
     .get().cnt;
+}
+
+export function addThread(db, url, title) {
+  const existing = db
+    .prepare("SELECT id FROM threads WHERE url = ? AND deleted_at IS NULL")
+    .get(url);
+  if (existing) return null;
+  const result = db
+    .prepare("INSERT INTO threads (url, title, status) VALUES (?, ?, 'active')")
+    .run(url, title);
+  return result.lastInsertRowid;
+}
+
+export function softDelete(db, id) {
+  db.prepare("UPDATE threads SET deleted_at = strftime('%s', 'now') WHERE id = ?").run(id);
 }
 
 export function updateTitle(db, id, title) {

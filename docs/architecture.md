@@ -10,7 +10,6 @@
 | Discord 通知 | [discord.js](https://discord.js.org/) | Discord チャンネルへのメッセージ送信 |
 | 環境変数 | [dotenv](https://github.com/motdotla/dotenv) | `.env` ファイルから設定を読み込み |
 | 対話型 CLI | [@inquirer/select](https://github.com/SBoudrias/Inquirer.js), [@inquirer/input](https://github.com/SBoudrias/Inquirer.js) | セットアップ時のチャンネル選択・トークン入力 |
-| ターミナル UI | [single-line-log](https://github.com/mafintosh/single-line-log) | ステータスバーの描画 |
 | テスト | [vitest](https://vitest.dev/) | ユニットテスト |
 
 ## ディレクトリ構成
@@ -33,9 +32,8 @@ src/
     http.js                 HTTP リクエスト (GET / HEAD) + リトライ
     discord.js              Discord への通知送信 + リトライ
     logger.js               タイムスタンプ付きログ出力
-    status.js               ターミナルステータスバー
 test/
-  functions/              純粋関数のテスト (27テスト)
+  functions/              純粋関数のテスト (31テスト)
     parse-thread-url.test.js
     parse-subject.test.js
     find-next-thread.test.js
@@ -53,6 +51,8 @@ test/
 |---|---|---|
 | `resWarningThreshold` | 980 | レス数がこの値以上で警告 |
 | `datSizeWarningKB` | 980 | dat サイズ (KB) がこの値以上で警告 |
+| `resDeadThreshold` | 1002 | レス数がこの値以上で死亡 |
+| `datSizeDeadKB` | 1024 | dat サイズ (KB) がこの値以上で死亡 (≈1,048,576 bytes = dat 上限) |
 
 ## データベーススキーマ
 
@@ -63,8 +63,8 @@ test/
 | `id` | INTEGER (PK) | 自動採番 |
 | `url` | TEXT NOT NULL | スレッド URL |
 | `title` | TEXT | subject.txt から取得したタイトル (自動更新) |
-| `warned` | INTEGER | 0: 未警告 / 1: 警告済み |
-| `deleted_at` | INTEGER | 論理削除日時 (UNIX タイムスタンプ) |
+| `status` | TEXT DEFAULT 'active' | 'active' / 'warned' / 'dead' |
+| `deleted_at` | INTEGER | 論理削除日時 (UNIX タイムスタンプ)。世代交代時に設定 |
 | `created_at` | INTEGER | 作成日時 (UNIX タイムスタンプ) |
 
 ## データフロー
@@ -85,19 +85,24 @@ runCheck(db, config) → stats[]
   │
   └─ スレッドごとに checkThread() → stat
       │
+      ├─ subject.txt に存在しない → dat落ちとして即 dead
       ├─ subject.txt からレス数を確認
-      ├─ レス数が前回から増加した場合: headContentLength(dat) で dat サイズ取得
-      │   (初回は必ず取得。変化なしなら前回値を再利用)
-      ├─ 警告条件判定 (レス数 ≥ 980 or dat ≥ 980KB)
-      ├─ findNextThread() で次スレ候補を検索
-      ├─ buildWarningMessage() で通知本文を組み立て
-      ├─ notifyDiscord() で送信
-      └─ markWarned(db, id)
+      ├─ headContentLength(dat) で dat サイズ取得
+      │   (初回は必ず取得。レス数が増加した場合のみ再取得。Accept-Encoding: identity で content-length を保証)
+      │   404 → datGone (dat消失) として dead。5xx → リトライ後にログ警告
+      ├─ 死亡条件判定 (レス数 ≥ 1002 or dat ≥ 1024KB or datGone)
+      ├─ 警告条件判定 (レス数 ≥ 980 or dat ≥ 980KB、active のみ)
+      ├─ notifyAndSetStatus():
+      │   ├─ findNextThread() で次スレ検索
+      │   ├─ 次スレ発見時 → addThread() で DB に自動登録 + softDelete() で旧スレ論理削除 (世代交代)
+      │   ├─ buildWarningMessage() で通知本文を組み立て
+      │   ├─ notifyDiscord() で送信
+      │   └─ setStatus(db, id, status)
 
   ▼
 index.js の tick()
-  ├─ stats[] をループし、各スレッドのレス数・dat サイズをログ出力
-  └─ renderStatus() でステータスバー更新
+  ├─ stats[] をループし、各スレッドの判定結果 (正常/警告/死亡) ・レス数・dat サイズをログ出力
+  └─ 正常/警告/死亡の件数をログ出力
 ```
 
 ## HTTP リトライ
@@ -114,4 +119,5 @@ index.js の tick()
 ## 5ch への負荷軽減策
 
 - subject.txt は板単位でグルーピングして **1 回だけ**取得
-- dat HEAD リクエストは `prevStats` (モジュール内 Map) でレス数を追跡し、**レス数が増加した時のみ**実行
+- dat HEAD リクエストは `prevStats` (モジュール内 Map) でレス数を追跡し、**レス数が増加した時のみ**実行（初回は必ず実行）
+- HEAD リクエストに `Accept-Encoding: identity` を付与し、Cloudflare の圧縮による `Content-Length` ヘッダ消失を防止

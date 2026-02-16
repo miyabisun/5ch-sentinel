@@ -4,28 +4,31 @@ import { parseThreadUrl } from "../functions/parse-thread-url.js";
 import { parseSubjectTxt } from "../functions/parse-subject.js";
 import { findNextThread } from "../functions/find-next-thread.js";
 import { buildWarningMessage } from "../functions/build-message.js";
-import { getActiveThreads, setStatus, updateTitle } from "./database.js";
+import { getActiveThreads, setStatus, updateTitle, addThread, softDelete } from "./database.js";
 import { fetchBuffer, headContentLength } from "./http.js";
 import { notifyDiscord } from "./discord.js";
 import { log } from "./logger.js";
 
-// Track previous resCount and datSizeKB per thread to avoid unnecessary HEAD requests
+// Track previous resCount per thread to avoid unnecessary HEAD requests.
+// On first check (no prev entry), HEAD always runs — catching dat-gone at startup.
 const prevStats = new Map();
 
-async function notifyAndSetStatus(db, thread, config, { server, board, subjectEntries, resCount, datSizeKB, status, dead }) {
+async function notifyAndSetStatus(db, thread, config, { server, board, subjectEntries, resCount, datSizeKB, status, dead, datGone = false }) {
   const next = thread.title ? findNextThread(thread.title, subjectEntries) : null;
+  let nextThread = null;
   if (next) {
-    log(`[次スレ発見] ${next.title}`);
+    const nextUrl = `https://${server}.5ch.net/test/read.cgi/${board}/${next.threadId}/`;
+    const newId = addThread(db, nextUrl, next.title);
+    if (newId) {
+      log(`[世代交代] ID=${thread.id} → ID=${newId} ${next.title}`);
+      softDelete(db, thread.id);
+    } else {
+      log(`[次スレ発見] ${next.title} (登録済み)`);
+    }
+    nextThread = { title: next.title, url: nextUrl };
   } else {
     log(`[次スレ未発見] ID=${thread.id}`);
   }
-
-  const nextThread = next
-    ? {
-        title: next.title,
-        url: `https://${server}.5ch.net/test/read.cgi/${board}/${next.threadId}/`,
-      }
-    : null;
 
   const content = buildWarningMessage({
     title: thread.title || thread.url,
@@ -34,6 +37,7 @@ async function notifyAndSetStatus(db, thread, config, { server, board, subjectEn
     datSizeKB,
     nextThread,
     dead,
+    datGone,
   });
 
   await notifyDiscord(config.discordClient, config.discordChannelId, content);
@@ -80,7 +84,8 @@ async function checkThread(db, thread, subjectEntries, config) {
   const resCount = entry.resCount;
   const prev = prevStats.get(thread.id);
 
-  // Check dat size only when resCount increased (or first check)
+  // Check dat size when resCount increased or on first check (no prev entry).
+  // First check always runs HEAD — this catches dat-gone even at startup.
   let datSizeKB = prev?.datSizeKB ?? null;
   let datGone = false;
   if (!prev || resCount > prev.resCount) {
@@ -91,7 +96,7 @@ async function checkThread(db, thread, subjectEntries, config) {
         datSizeKB = bytes / 1024;
       }
     } catch (err) {
-      if (err.httpStatus) {
+      if (err.httpStatus === 404) {
         datGone = true;
       }
       log(`[警告] datサイズ取得失敗: ID=${thread.id} ${err.message}`);
@@ -119,6 +124,7 @@ async function checkThread(db, thread, subjectEntries, config) {
       datSizeKB,
       status: "dead",
       dead: true,
+      datGone,
     });
 
     stat.dead = true;

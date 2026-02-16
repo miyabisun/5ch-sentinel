@@ -34,7 +34,7 @@ export async function headContentLength(url, userAgent) {
     async () => {
       const res = await fetch(url, {
         method: "HEAD",
-        headers: { "User-Agent": userAgent },
+        headers: { "User-Agent": userAgent, "Accept-Encoding": "identity" },
       });
       if (!res.ok) {
         const err = new Error(`HEAD ${res.status} for ${url}`);
@@ -44,6 +44,6 @@ export async function headContentLength(url, userAgent) {
       const cl = res.headers.get("content-length");
       return cl ? parseInt(cl, 10) : null;
     },
-    { shouldRetry: (err) => !err.httpStatus },
+    { shouldRetry: (err) => err.httpStatus !== 404 },
   );
 }

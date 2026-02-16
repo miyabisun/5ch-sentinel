@@ -70,6 +70,15 @@ HEAD https://{server}.5ch.net/{board}/dat/{thread_id}.dat
 
 `Content-Length` ヘッダからバイト数を取得し、KB に変換する。
 
+Node.js の `fetch` はデフォルトで `Accept-Encoding: gzip, deflate, br` を送信するため、Cloudflare が圧縮レスポンスを返し `Content-Length` が消失する。これを防ぐため `Accept-Encoding: identity` を明示的に付与する。
+
+### エラー時の挙動
+
+| HTTP ステータス | 挙動 |
+|---|---|
+| 404 | dat 消失と判定（リトライなし）。スレッドを dead にする |
+| 5xx (502, 503 等) | 最大 4 回リトライ。全失敗時はログ警告のみ（dead にしない） |
+
 ### チェック条件
 
 前回チェック時からレス数が増加した場合にのみ HEAD リクエストを実行する（初回は必ず実行）。レス数に変化がなければ前回取得した dat サイズを再利用する。
