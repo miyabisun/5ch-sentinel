@@ -20,7 +20,7 @@ const config = {
   discordClient: null,
   discordChannelId: process.env.DISCORD_CHANNEL_ID,
   resWarningThreshold: 980,
-  datSizeWarningKB: 980,
+  datSizeWarningKB: 900,
   resDeadThreshold: 1002,
   datSizeDeadKB: 1024,
 };
