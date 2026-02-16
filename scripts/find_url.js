@@ -4,7 +4,7 @@ const USER_AGENT =
 const keyword = process.argv[2];
 
 if (!keyword) {
-  console.error("使い方: node find_url.js <検索ワード>");
+  console.error("使い方: npm run find -- <検索ワード>");
   process.exit(1);
 }
 

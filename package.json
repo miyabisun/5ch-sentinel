@@ -6,9 +6,10 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "add": "node add.js",
-    "setup": "node setup.js",
-    "find": "node find_url.js",
+    "add": "node scripts/add.js",
+    "delete": "node scripts/delete.js",
+    "setup": "node scripts/setup.js",
+    "find": "node scripts/find_url.js",
     "test": "vitest run"
   },
   "dependencies": {

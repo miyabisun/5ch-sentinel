@@ -36,16 +36,25 @@ npm run find -- <検索ワード>
 ## 監視対象の登録
 
 ```bash
-node add.js <スレッドURL>
+npm run add -- <スレッドURL>
 ```
 
 例:
 ```bash
-node add.js "https://eagle.5ch.net/test/read.cgi/livejupiter/1234567890/"
+npm run add -- "https://eagle.5ch.net/test/read.cgi/livejupiter/1234567890/"
 ```
 
 URL のバリデーション・重複チェックを行い、SQLite データベース (`sentinel.db`) に登録する。
 データベースは初回実行時に自動作成される。
+
+## 監視対象の削除
+
+```bash
+npm run delete
+```
+
+対話形式で監視中のスレッド一覧を表示し、選択したスレッドを監視対象から除外する。
+次スレ自動検出の誤爆を修正する際に使用する。
 
 ## 起動
 
@@ -56,9 +65,9 @@ npm start
 起動すると 60 秒間隔でスレッドの状態をチェックし、以下の条件を満たすと Discord に警告を送信する。
 
 - レス数が 980 以上
-- dat ファイルサイズが 980KB 以上
+- dat ファイルサイズが 900KB 以上
 
-警告送信後、そのスレッドは `warned` としてマークされ、以降のチェック対象から外れる。
+警告は各スレッドにつき一度だけ送信される。警告済みのスレッドは引き続き死亡を監視する。
 
 ## 設定値
 
@@ -78,7 +87,7 @@ npm start
 | `userAgent` | `Monazilla/1.00 Mozilla/5.0 ...Chrome/133...` | 5ch へのリクエストに使う User-Agent |
 | `resThresholdForSizeCheck` | `900` | dat サイズチェックを開始するレス数 |
 | `resWarningThreshold` | `980` | レス数の警告閾値 |
-| `datSizeWarningKB` | `980` | dat サイズの警告閾値 (KB) |
+| `datSizeWarningKB` | `900` | dat サイズの警告閾値 (KB) |
 
 その他、`DB_PATH` (データベースファイルパス) と `CHECK_INTERVAL_MS` (チェック間隔 ms) も同じ箇所で定義されている。
 

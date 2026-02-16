@@ -6,8 +6,8 @@ import select from "@inquirer/select";
 import input from "@inquirer/input";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ENV_PATH = path.join(__dirname, ".env");
-const ENV_EXAMPLE_PATH = path.join(__dirname, ".env.example");
+const ENV_PATH = path.join(__dirname, "..", ".env");
+const ENV_EXAMPLE_PATH = path.join(__dirname, "..", ".env.example");
 
 // ---------------------------------------------------------------------------
 // Helpers

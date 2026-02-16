@@ -2,20 +2,20 @@ import path from "path";
 import { fileURLToPath } from "url";
 import iconv from "iconv-lite";
 
-import { initDatabase } from "./src/modules/database.js";
-import { parseThreadUrl } from "./src/functions/parse-thread-url.js";
-import { parseSubjectTxt } from "./src/functions/parse-subject.js";
-import { fetchBuffer } from "./src/modules/http.js";
+import { initDatabase } from "../src/modules/database.js";
+import { parseThreadUrl } from "../src/functions/parse-thread-url.js";
+import { parseSubjectTxt } from "../src/functions/parse-subject.js";
+import { fetchBuffer } from "../src/modules/http.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, "sentinel.db");
+const DB_PATH = path.join(__dirname, "..", "sentinel.db");
 const USER_AGENT =
   "Monazilla/1.00 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36";
 
 const url = process.argv[2];
 
 if (!url) {
-  console.error("使い方: node add.js <スレッドURL>");
+  console.error("使い方: npm run add -- <スレッドURL>");
   process.exit(1);
 }
 

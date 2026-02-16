@@ -16,9 +16,11 @@
 
 ```
 index.js                  エントリポイント (main 関数・設定値)
-add.js                    スレッド登録 CLI
-find_url.js               スレタイ検索 CLI (find.5ch.net)
-setup.js                  対話型セットアップ (トークン入力・チャンネル選択・.env 書き込み)
+scripts/
+  add.js                  スレッド登録 CLI
+  delete.js               監視対象削除 CLI (対話型)
+  find_url.js             スレタイ検索 CLI (find.5ch.net)
+  setup.js                対話型セットアップ (トークン入力・チャンネル選択・.env 書き込み)
 .env.example              環境変数テンプレート
 src/
   functions/              純粋関数 (副作用なし・テスト対象)
@@ -50,7 +52,7 @@ test/
 | キー | デフォルト値 | 説明 |
 |---|---|---|
 | `resWarningThreshold` | 980 | レス数がこの値以上で警告 |
-| `datSizeWarningKB` | 980 | dat サイズ (KB) がこの値以上で警告 |
+| `datSizeWarningKB` | 900 | dat サイズ (KB) がこの値以上で警告 |
 | `resDeadThreshold` | 1002 | レス数がこの値以上で死亡 |
 | `datSizeDeadKB` | 1024 | dat サイズ (KB) がこの値以上で死亡 (≈1,048,576 bytes = dat 上限) |
 
@@ -91,7 +93,7 @@ runCheck(db, config) → stats[]
       │   (初回は必ず取得。レス数が増加した場合のみ再取得。Accept-Encoding: identity で content-length を保証)
       │   404 → datGone (dat消失) として dead。5xx → リトライ後にログ警告
       ├─ 死亡条件判定 (レス数 ≥ 1002 or dat ≥ 1024KB or datGone)
-      ├─ 警告条件判定 (レス数 ≥ 980 or dat ≥ 980KB、active のみ)
+      ├─ 警告条件判定 (レス数 ≥ 980 or dat ≥ 900KB、active のみ)
       ├─ notifyAndSetStatus():
       │   ├─ findNextThread() で次スレ検索
       │   ├─ 次スレ発見時 → addThread() で DB に自動登録 + softDelete() で旧スレ論理削除 (世代交代)
