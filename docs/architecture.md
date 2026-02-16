@@ -30,12 +30,12 @@ src/
   modules/                副作用を伴うモジュール (DB・HTTP・I/O)
     database.js             SQLite の初期化・CRUD
     checker.js              スレッドチェックのオーケストレーション
-    http.js                 HTTP リクエスト (GET / HEAD)
-    discord.js              Discord への通知送信
+    http.js                 HTTP リクエスト (GET / HEAD) + リトライ
+    discord.js              Discord への通知送信 + リトライ
     logger.js               タイムスタンプ付きログ出力
-    status.js               ターミナルステータスバー・スレッド統計
+    status.js               ターミナルステータスバー
 test/
-  functions/              純粋関数のテスト
+  functions/              純粋関数のテスト (27テスト)
     parse-thread-url.test.js
     parse-subject.test.js
     find-next-thread.test.js
@@ -46,6 +46,13 @@ test/
 
 - **functions** — 入力から出力を返すだけの純粋関数。外部 I/O に依存せず、単体テストが容易。
 - **modules** — DB アクセス・HTTP 通信・ターミナル出力など副作用を伴う処理。設定値は `index.js` からパラメータとして受け取る。
+
+## 設定値 (`index.js` の config)
+
+| キー | デフォルト値 | 説明 |
+|---|---|---|
+| `resWarningThreshold` | 980 | レス数がこの値以上で警告 |
+| `datSizeWarningKB` | 980 | dat サイズ (KB) がこの値以上で警告 |
 
 ## データベーススキーマ
 
@@ -63,26 +70,48 @@ test/
 ## データフロー
 
 ```
-[60秒間隔のタイマー]
+[60秒間隔のタイマー (tick)]
   │
   ▼
-runCheck(db, config)
+runCheck(db, config) → stats[]
   │
   ├─ getActiveThreads(db)         … 監視対象スレッドを DB から取得
   │
   ├─ server+board ごとにグルーピング
   │
-  ├─ fetchBuffer(subject.txt)     … 板の全スレッド一覧を取得
+  ├─ fetchBuffer(subject.txt)     … 板の全スレッド一覧を取得 (板単位で1回)
   │   └─ iconv.decode(Shift_JIS)
   │   └─ parseSubjectTxt(text)
   │
-  └─ スレッドごとに checkThread()
+  └─ スレッドごとに checkThread() → stat
       │
       ├─ subject.txt からレス数を確認
-      ├─ 閾値超過時: headContentLength(dat) で dat サイズ取得
+      ├─ レス数が前回から増加した場合: headContentLength(dat) で dat サイズ取得
+      │   (初回は必ず取得。変化なしなら前回値を再利用)
       ├─ 警告条件判定 (レス数 ≥ 980 or dat ≥ 980KB)
       ├─ findNextThread() で次スレ候補を検索
       ├─ buildWarningMessage() で通知本文を組み立て
       ├─ notifyDiscord() で送信
       └─ markWarned(db, id)
+
+  ▼
+index.js の tick()
+  ├─ stats[] をループし、各スレッドのレス数・dat サイズをログ出力
+  └─ renderStatus() でステータスバー更新
 ```
+
+## HTTP リトライ
+
+全 HTTP リクエストにリトライ機構を実装済み。定数名は `MAX_ATTEMPTS` で統一。
+
+| モジュール | 対象 | 試行回数 | リトライ戦略 |
+|---|---|---|---|
+| `http.js` | subject.txt 取得 / dat HEAD | 計 4 回 | 固定間隔 2 秒 |
+| `discord.js` | Discord メッセージ送信 | 計 3 回 | 指数バックオフ (1s, 2s, 4s) |
+
+全試行失敗時、`http.js` は例外を throw し呼び出し元の `checker.js` でログ出力、`discord.js` はエラーログを出力して return する。
+
+## 5ch への負荷軽減策
+
+- subject.txt は板単位でグルーピングして **1 回だけ**取得
+- dat HEAD リクエストは `prevStats` (モジュール内 Map) でレス数を追跡し、**レス数が増加した時のみ**実行

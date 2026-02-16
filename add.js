@@ -71,7 +71,7 @@ if (!title) {
 }
 
 const result = db
-  .prepare("INSERT INTO threads (url, title) VALUES (?, ?)")
+  .prepare("INSERT INTO threads (url, title, status) VALUES (?, ?, 'active')")
   .run(url, title);
 
 console.log(`登録完了: ID=${result.lastInsertRowid} ${title} ${url}`);

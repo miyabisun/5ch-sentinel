@@ -12,12 +12,12 @@ function displayWidth(str) {
   return w;
 }
 
-export function renderStatus(activeCount, warnedCount, lastCheck) {
+export function renderStatus(activeCount, deadCount, lastCheck) {
   const timeStr = lastCheck
     ? lastCheck.toLocaleTimeString("ja-JP", { hour12: false })
     : "--:--:--";
 
-  const left = `[監視中: ${activeCount}件] [警告済(完了): ${warnedCount}件]`;
+  const left = `[監視中: ${activeCount}件] [終了: ${deadCount}件]`;
   const right = `[最終チェック: ${timeStr}]`;
   const cols = process.stdout.columns || 80;
   const gap = Math.max(1, cols - displayWidth(left) - displayWidth(right));

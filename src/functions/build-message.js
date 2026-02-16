@@ -1,4 +1,4 @@
-export function buildWarningMessage({ title, url, resCount, datSizeKB, nextThread }) {
+export function buildWarningMessage({ title, url, resCount, datSizeKB, nextThread, dead = false }) {
   let nextInfo;
   if (nextThread) {
     nextInfo = `${nextThread.title}\n${nextThread.url}`;
@@ -6,12 +6,20 @@ export function buildWarningMessage({ title, url, resCount, datSizeKB, nextThrea
     nextInfo = "※次スレ候補が見つかりませんでした";
   }
 
+  const header = dead
+    ? `🔴 **スレッド終了通知**`
+    : `⚠️ **スレッド終了警告**`;
+
+  const statusLine =
+    resCount !== null
+      ? `現在のレス数: ${resCount}\nDatサイズ: ${datSizeKB != null ? datSizeKB.toFixed(1) : "不明"}KB`
+      : "状態: dat落ち (subject.txt から消失)";
+
   return (
-    `⚠️ **スレッド終了警告**\n` +
+    `${header}\n` +
     `タイトル: ${title}\n` +
     `URL: ${url}\n` +
-    `現在のレス数: ${resCount}\n` +
-    `Datサイズ: ${datSizeKB != null ? datSizeKB.toFixed(1) : "不明"}KB\n\n` +
+    `${statusLine}\n\n` +
     `⬇️ 次スレ候補:\n${nextInfo}`
   );
 }

@@ -4,19 +4,51 @@ import { parseThreadUrl } from "../functions/parse-thread-url.js";
 import { parseSubjectTxt } from "../functions/parse-subject.js";
 import { findNextThread } from "../functions/find-next-thread.js";
 import { buildWarningMessage } from "../functions/build-message.js";
-import { getActiveThreads, markWarned, updateTitle } from "./database.js";
+import { getActiveThreads, setStatus, updateTitle } from "./database.js";
 import { fetchBuffer, headContentLength } from "./http.js";
 import { notifyDiscord } from "./discord.js";
 import { log } from "./logger.js";
 
-// In-memory store for volatile per-thread data (resCount, datSizeKB)
-const threadStats = new Map();
+// Track previous resCount and datSizeKB per thread to avoid unnecessary HEAD requests
+const prevStats = new Map();
+
+async function notifyAndSetStatus(db, thread, config, { server, board, subjectEntries, resCount, datSizeKB, status, dead }) {
+  const next = thread.title ? findNextThread(thread.title, subjectEntries) : null;
+  if (next) {
+    log(`[次スレ発見] ${next.title}`);
+  } else {
+    log(`[次スレ未発見] ID=${thread.id}`);
+  }
+
+  const nextThread = next
+    ? {
+        title: next.title,
+        url: `https://${server}.5ch.net/test/read.cgi/${board}/${next.threadId}/`,
+      }
+    : null;
+
+  const content = buildWarningMessage({
+    title: thread.title || thread.url,
+    url: thread.url,
+    resCount,
+    datSizeKB,
+    nextThread,
+    dead,
+  });
+
+  await notifyDiscord(config.discordClient, config.discordChannelId, content);
+  setStatus(db, thread.id, status);
+
+  if (status === "dead") {
+    prevStats.delete(thread.id);
+  }
+}
 
 async function checkThread(db, thread, subjectEntries, config) {
   const parsed = parseThreadUrl(thread.url);
   if (!parsed) {
     log(`[エラー] URL解析失敗: ${thread.url}`);
-    return;
+    return null;
   }
 
   const { server, board, threadId } = parsed;
@@ -24,8 +56,19 @@ async function checkThread(db, thread, subjectEntries, config) {
   // Find this thread in subject.txt
   const entry = subjectEntries.find((e) => e.threadId === threadId);
   if (!entry) {
-    log(`[情報] スレッド未発見 (dat落ち?): ID=${thread.id} ${thread.url}`);
-    return;
+    log(`[終了検知] dat落ち: ID=${thread.id} "${thread.title}"`);
+
+    await notifyAndSetStatus(db, thread, config, {
+      server,
+      board,
+      subjectEntries,
+      resCount: null,
+      datSizeKB: null,
+      status: "dead",
+      dead: true,
+    });
+
+    return { id: thread.id, title: thread.title, resCount: null, datSizeKB: null, dead: true };
   }
 
   // Update title in DB if not set or changed
@@ -35,73 +78,84 @@ async function checkThread(db, thread, subjectEntries, config) {
   }
 
   const resCount = entry.resCount;
+  const prev = prevStats.get(thread.id);
 
-  // Update in-memory stats
-  const stats = threadStats.get(thread.id) || {};
-  stats.resCount = resCount;
-
-  // Size check (only when res > threshold)
-  let datSizeKB = null;
-  if (resCount > config.resThresholdForSizeCheck) {
+  // Check dat size only when resCount increased (or first check)
+  let datSizeKB = prev?.datSizeKB ?? null;
+  let datGone = false;
+  if (!prev || resCount > prev.resCount) {
     try {
       const datUrl = `https://${server}.5ch.net/${board}/dat/${threadId}.dat`;
       const bytes = await headContentLength(datUrl, config.userAgent);
       if (bytes !== null) {
         datSizeKB = bytes / 1024;
-        stats.datSizeKB = datSizeKB;
       }
     } catch (err) {
+      if (err.httpStatus) {
+        datGone = true;
+      }
       log(`[警告] datサイズ取得失敗: ID=${thread.id} ${err.message}`);
     }
   }
 
-  threadStats.set(thread.id, stats);
+  prevStats.set(thread.id, { resCount, datSizeKB });
+  const stat = { id: thread.id, title: thread.title, resCount, datSizeKB, dead: false };
 
-  // Warning conditions
-  const resWarning = resCount >= config.resWarningThreshold;
-  const sizeWarning = datSizeKB !== null && datSizeKB >= config.datSizeWarningKB;
+  // Dead conditions (checked for both active and warned)
+  const resDead = resCount >= config.resDeadThreshold;
+  const sizeDead = datSizeKB !== null && datSizeKB >= config.datSizeDeadKB;
 
-  if (!resWarning && !sizeWarning) return;
+  if (resDead || sizeDead || datGone) {
+    log(
+      `[終了検知] ID=${thread.id} "${thread.title}" ` +
+        `レス数=${resCount} datサイズ=${datGone ? "dat消失" : datSizeKB !== null ? datSizeKB.toFixed(1) + "KB" : "N/A"}`
+    );
 
-  log(
-    `[警告検知] ID=${thread.id} "${thread.title}" ` +
-      `レス数=${resCount} datサイズ=${datSizeKB !== null ? datSizeKB.toFixed(1) + "KB" : "N/A"}`
-  );
+    await notifyAndSetStatus(db, thread, config, {
+      server,
+      board,
+      subjectEntries,
+      resCount,
+      datSizeKB,
+      status: "dead",
+      dead: true,
+    });
 
-  // Search for next thread
-  const next = findNextThread(thread.title, subjectEntries);
-  if (next) {
-    log(`[次スレ発見] ${next.title}`);
-  } else {
-    log(`[次スレ未発見] ID=${thread.id}`);
+    stat.dead = true;
+    return stat;
   }
 
-  // Build notification content
-  const nextThread = next
-    ? {
-        title: next.title,
-        url: `https://${server}.5ch.net/test/read.cgi/${board}/${next.threadId}/`,
-      }
-    : null;
+  // Warning conditions (only for active threads)
+  if (thread.status === "active") {
+    const resWarning = resCount >= config.resWarningThreshold;
+    const sizeWarning = datSizeKB !== null && datSizeKB >= config.datSizeWarningKB;
 
-  const content = buildWarningMessage({
-    title: thread.title,
-    url: thread.url,
-    resCount,
-    datSizeKB,
-    nextThread,
-  });
+    if (resWarning || sizeWarning) {
+      log(
+        `[警告検知] ID=${thread.id} "${thread.title}" ` +
+          `レス数=${resCount} datサイズ=${datSizeKB !== null ? datSizeKB.toFixed(1) + "KB" : "N/A"}`
+      );
 
-  await notifyDiscord(config.discordClient, config.discordChannelId, content);
+      await notifyAndSetStatus(db, thread, config, {
+        server,
+        board,
+        subjectEntries,
+        resCount,
+        datSizeKB,
+        status: "warned",
+        dead: false,
+      });
+    }
+  }
 
-  // Mark as warned
-  markWarned(db, thread.id);
-  threadStats.delete(thread.id);
+  return stat;
 }
 
 export async function runCheck(db, config) {
   const threads = getActiveThreads(db);
-  if (threads.length === 0) return;
+  if (threads.length === 0) return [];
+
+  const stats = [];
 
   // Group threads by server+board to avoid fetching subject.txt multiple times
   const groups = new Map();
@@ -129,10 +183,13 @@ export async function runCheck(db, config) {
 
     for (const thread of group.threads) {
       try {
-        await checkThread(db, thread, subjectEntries, config);
+        const stat = await checkThread(db, thread, subjectEntries, config);
+        if (stat) stats.push(stat);
       } catch (err) {
         log(`[エラー] チェック失敗 ID=${thread.id}: ${err.message}`);
       }
     }
   }
+
+  return stats;
 }

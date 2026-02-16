@@ -1,9 +1,9 @@
 import "dotenv/config";
 import path from "path";
 import { fileURLToPath } from "url";
-import { Client, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 
-import { initDatabase, getActiveThreads, getWarnedCount } from "./src/modules/database.js";
+import { initDatabase, getActiveThreads, getWarnedCount, getDeadCount } from "./src/modules/database.js";
 import { log, clearStatusLine } from "./src/modules/logger.js";
 import { renderStatus } from "./src/modules/status.js";
 import { runCheck } from "./src/modules/checker.js";
@@ -20,9 +20,10 @@ const config = {
   userAgent: "Monazilla/1.00 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
   discordClient: null,
   discordChannelId: process.env.DISCORD_CHANNEL_ID,
-  resThresholdForSizeCheck: 900,
   resWarningThreshold: 980,
   datSizeWarningKB: 980,
+  resDeadThreshold: 1002,
+  datSizeDeadKB: 1075,
 };
 
 async function main() {
@@ -35,11 +36,11 @@ async function main() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
   await new Promise((resolve, reject) => {
-    client.once("ready", () => {
+    client.once(Events.ClientReady, () => {
       log(`Discord 接続完了 (${client.user.tag})`);
       resolve();
     });
-    client.once("error", reject);
+    client.once(Events.Error, reject);
     client.login(process.env.DISCORD_TOKEN).catch(reject);
   });
 
@@ -51,25 +52,42 @@ async function main() {
   log("5ch-sentinel 起動");
   log(`DB: ${DB_PATH}`);
 
-  const activeCount = getActiveThreads(db).length;
-  const warnedCount = getWarnedCount(db);
-  log(`監視対象: ${activeCount}件 / 警告済: ${warnedCount}件`);
-
-  // Initial render
-  renderStatus(activeCount, warnedCount, lastCheck);
+  log(`監視対象: ${getActiveThreads(db).length}件 / 警告済: ${getWarnedCount(db)}件 / 終了: ${getDeadCount(db)}件`);
 
   // Periodic check
   async function tick() {
+    let stats = [];
     try {
-      await runCheck(db, config);
+      stats = await runCheck(db, config);
     } catch (err) {
       log(`[致命的エラー] ${err.message}`);
     }
     lastCheck = new Date();
 
+    for (const s of stats) {
+      const isWarning =
+        !s.dead &&
+        (s.resCount >= config.resWarningThreshold ||
+          (s.datSizeKB !== null && s.datSizeKB >= config.datSizeWarningKB));
+
+      const res = s.resCount !== null ? s.resCount : "dat落ち";
+      const size = s.datSizeKB !== null ? `${s.datSizeKB.toFixed(1)}KB` : "N/A";
+      const statusText = `レス=${res} dat=${size}`;
+
+      // Red for dead, yellow for threshold warning, no color otherwise
+      const colored = s.dead
+        ? `\x1b[31m${statusText}\x1b[0m`
+        : isWarning
+          ? `\x1b[33m${statusText}\x1b[0m`
+          : statusText;
+
+      log(`  #${s.id} ${s.title}`);
+      log(`       ${colored}`);
+    }
+
     const currentActive = getActiveThreads(db).length;
-    const currentWarned = getWarnedCount(db);
-    renderStatus(currentActive, currentWarned, lastCheck);
+    const currentDead = getDeadCount(db);
+    renderStatus(currentActive, currentDead, lastCheck);
   }
 
   // Run immediately, then every interval
