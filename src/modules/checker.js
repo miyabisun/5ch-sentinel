@@ -1,9 +1,10 @@
 import iconv from "iconv-lite";
 
-import { parseThreadUrl } from "../functions/parse-thread-url.js";
 import { parseSubjectTxt } from "../functions/parse-subject.js";
+import { parseThreadUrl } from "../functions/parse-thread-url.js";
 import { findNextThread } from "../functions/find-next-thread.js";
 import { buildWarningMessage } from "../functions/build-message.js";
+import { groupThreadsByBoard } from "../functions/group-threads-by-board.js";
 import { getActiveThreads, setStatus, updateTitle, addThread, softDelete } from "./database.js";
 import { fetchBuffer, headContentLength } from "./http.js";
 import { notifyDiscord } from "./discord.js";
@@ -48,6 +49,12 @@ async function notifyAndSetStatus(db, thread, config, { server, board, subjectEn
   }
 }
 
+async function fetchDatSize(server, board, threadId, userAgent) {
+  const datUrl = `https://${server}.5ch.net/${board}/dat/${threadId}.dat`;
+  const bytes = await headContentLength(datUrl, userAgent);
+  return bytes !== null ? bytes / 1024 : null;
+}
+
 async function checkThread(db, thread, subjectEntries, config) {
   const parsed = parseThreadUrl(thread.url);
   if (!parsed) {
@@ -90,15 +97,10 @@ async function checkThread(db, thread, subjectEntries, config) {
   let datGone = false;
   if (!prev || resCount > prev.resCount) {
     try {
-      const datUrl = `https://${server}.5ch.net/${board}/dat/${threadId}.dat`;
-      const bytes = await headContentLength(datUrl, config.userAgent);
-      if (bytes !== null) {
-        datSizeKB = bytes / 1024;
-      }
+      const size = await fetchDatSize(server, board, threadId, config.userAgent);
+      if (size !== null) datSizeKB = size;
     } catch (err) {
-      if (err.httpStatus === 404) {
-        datGone = true;
-      }
+      if (err.httpStatus === 404) datGone = true;
       log(`[警告] datサイズ取得失敗: ID=${thread.id} ${err.message}`);
     }
   }
@@ -161,19 +163,14 @@ export async function runCheck(db, config) {
   const threads = getActiveThreads(db);
   if (threads.length === 0) return [];
 
-  const stats = [];
-
-  // Group threads by server+board to avoid fetching subject.txt multiple times
-  const groups = new Map();
-  for (const thread of threads) {
-    const parsed = parseThreadUrl(thread.url);
-    if (!parsed) continue;
-    const key = `${parsed.server}/${parsed.board}`;
-    if (!groups.has(key)) {
-      groups.set(key, { server: parsed.server, board: parsed.board, threads: [] });
-    }
-    groups.get(key).threads.push(thread);
+  // Clean stale prevStats entries (e.g. manually deleted threads)
+  const activeIds = new Set(threads.map((t) => t.id));
+  for (const id of prevStats.keys()) {
+    if (!activeIds.has(id)) prevStats.delete(id);
   }
+
+  const stats = [];
+  const groups = groupThreadsByBoard(threads);
 
   for (const [, group] of groups) {
     const subjectUrl = `https://${group.server}.5ch.net/${group.board}/subject.txt`;

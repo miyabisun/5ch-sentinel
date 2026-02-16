@@ -29,6 +29,24 @@ function writeEnvValue(env, key, value) {
   return env.trimEnd() + `\n${key}=${value}\n`;
 }
 
+function buildChannelChoices(client) {
+  const choices = [];
+  for (const guild of client.guilds.cache.values()) {
+    const channels = guild.channels.cache
+      .filter((ch) => ch.type === ChannelType.GuildText)
+      .sort((a, b) => a.position - b.position);
+
+    for (const ch of channels.values()) {
+      const category = ch.parent ? `${ch.parent.name}/` : "";
+      choices.push({
+        name: `${guild.name} > ${category}#${ch.name}`,
+        value: ch.id,
+      });
+    }
+  }
+  return choices;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -62,20 +80,7 @@ try {
 console.log(`ログイン成功: ${client.user.tag}\n`);
 
 // 3. Collect text channels
-const choices = [];
-for (const guild of client.guilds.cache.values()) {
-  const channels = guild.channels.cache
-    .filter((ch) => ch.type === ChannelType.GuildText)
-    .sort((a, b) => a.position - b.position);
-
-  for (const ch of channels.values()) {
-    const category = ch.parent ? `${ch.parent.name}/` : "";
-    choices.push({
-      name: `${guild.name} > ${category}#${ch.name}`,
-      value: ch.id,
-    });
-  }
-}
+const choices = buildChannelChoices(client);
 
 if (choices.length === 0) {
   console.error("エラー: Bot が参加しているサーバーにテキストチャンネルがありません");

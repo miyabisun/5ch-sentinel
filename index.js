@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { Client, Events, GatewayIntentBits } from "discord.js";
 
 import { initDatabase, getActiveCount, getWarnedCount, getDeadCount } from "./src/modules/database.js";
+import { formatThreadStat } from "./src/functions/format-thread-stat.js";
 import { log } from "./src/modules/logger.js";
 import { runCheck } from "./src/modules/checker.js";
 
@@ -46,7 +47,6 @@ async function main() {
   config.discordClient = client;
 
   const db = initDatabase(DB_PATH);
-  let lastCheck = null;
 
   log("5ch-sentinel 起動");
   log(`DB: ${DB_PATH}`);
@@ -61,27 +61,10 @@ async function main() {
     } catch (err) {
       log(`[致命的エラー] ${err.message}`);
     }
-    lastCheck = new Date();
-
     for (const s of stats) {
-      const isWarning =
-        !s.dead &&
-        (s.resCount >= config.resWarningThreshold ||
-          (s.datSizeKB !== null && s.datSizeKB >= config.datSizeWarningKB));
-
-      const res = s.resCount !== null ? s.resCount : "dat落ち";
-      const size = s.datSizeKB !== null ? `${s.datSizeKB.toFixed(1)}KB` : "N/A";
-
-      const [label, color] = s.dead
-        ? ["死亡", "\x1b[31m"]
-        : isWarning
-          ? ["警告", "\x1b[33m"]
-          : ["正常", ""];
-      const detail = `${label} レス=${res} dat=${size}`;
-      const colored = color ? `${color}${detail}\x1b[0m` : detail;
-
-      log(`  #${s.id} ${s.title}`);
-      log(`       ${colored}`);
+      const { header, detail } = formatThreadStat(s, config);
+      log(header);
+      log(detail);
     }
 
     log(`正常: ${getActiveCount(db)}件 / 警告: ${getWarnedCount(db)}件 / 死亡: ${getDeadCount(db)}件`);

@@ -24,10 +24,12 @@ scripts/
 .env.example              環境変数テンプレート
 src/
   functions/              純粋関数 (副作用なし・テスト対象)
-    parse-thread-url.js     URL 解析
-    parse-subject.js        subject.txt パース
-    find-next-thread.js     次スレ検索
     build-message.js        通知メッセージ組み立て
+    find-next-thread.js     次スレ検索
+    format-thread-stat.js   ログ用ステータス整形
+    group-threads-by-board.js  スレッドの板別グルーピング
+    parse-subject.js        subject.txt パース
+    parse-thread-url.js     URL 解析
   modules/                副作用を伴うモジュール (DB・HTTP・I/O)
     database.js             SQLite の初期化・CRUD
     checker.js              スレッドチェックのオーケストレーション
